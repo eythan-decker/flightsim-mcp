@@ -225,3 +225,100 @@ func TestReadMessage(t *testing.T) {
 	assert.Equal(t, uint32(42), h.ID)
 	assert.Equal(t, payload, data)
 }
+
+func TestAddToDataDefinition(t *testing.T) {
+	c := NewClient(defaultTestConfig())
+	_, serverConn := connectAndDrainOpen(t, c)
+
+	done := make(chan struct {
+		h       Header
+		payload []byte
+	}, 1)
+	go func() {
+		h, p, err := drainOneMessage(serverConn)
+		if err == nil {
+			done <- struct {
+				h       Header
+				payload []byte
+			}{h, p}
+		}
+	}()
+
+	err := c.AddToDataDefinition(1, PlaneLatitude)
+	require.NoError(t, err)
+
+	select {
+	case msg := <-done:
+		assert.Equal(t, uint32(MsgAddToDataDef), msg.h.Type)
+
+		// Verify payload layout
+		p := msg.payload
+		defID := binary.LittleEndian.Uint32(p[0:4])
+		assert.Equal(t, uint32(1), defID)
+
+		// Find null-terminated var name after defID
+		nameStart := 4
+		nameEnd := nameStart
+		for nameEnd < len(p) && p[nameEnd] != 0 {
+			nameEnd++
+		}
+		assert.Equal(t, "PLANE LATITUDE", string(p[nameStart:nameEnd]))
+
+		// Find null-terminated unit name after var name + null byte
+		unitStart := nameEnd + 1
+		unitEnd := unitStart
+		for unitEnd < len(p) && p[unitEnd] != 0 {
+			unitEnd++
+		}
+		assert.Equal(t, "degrees", string(p[unitStart:unitEnd]))
+
+		// Data type after unit name + null byte
+		dtStart := unitEnd + 1
+		dt := binary.LittleEndian.Uint32(p[dtStart : dtStart+4])
+		assert.Equal(t, uint32(DataTypeFloat64), dt)
+
+	case <-time.After(time.Second):
+		t.Fatal("timeout")
+	}
+}
+
+func TestRequestData(t *testing.T) {
+	c := NewClient(defaultTestConfig())
+	_, serverConn := connectAndDrainOpen(t, c)
+
+	done := make(chan struct {
+		h       Header
+		payload []byte
+	}, 1)
+	go func() {
+		h, p, err := drainOneMessage(serverConn)
+		if err == nil {
+			done <- struct {
+				h       Header
+				payload []byte
+			}{h, p}
+		}
+	}()
+
+	err := c.RequestData(1, 0, 100)
+	require.NoError(t, err)
+
+	select {
+	case msg := <-done:
+		assert.Equal(t, uint32(MsgRequestData), msg.h.Type)
+
+		p := msg.payload
+		require.Len(t, p, 12)
+
+		requestID := binary.LittleEndian.Uint32(p[0:4])
+		defID := binary.LittleEndian.Uint32(p[4:8])
+		objectID := binary.LittleEndian.Uint32(p[8:12])
+
+		assert.Equal(t, uint32(100), requestID)
+		assert.Equal(t, uint32(1), defID)
+		assert.Equal(t, uint32(0), objectID)
+
+	case <-time.After(time.Second):
+		t.Fatal("timeout")
+	}
+}

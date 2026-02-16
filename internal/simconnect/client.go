@@ -2,6 +2,7 @@ package simconnect
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
@@ -156,4 +157,41 @@ func (c *Client) readMessage() (Header, []byte, error) {
 		return Header{}, nil, fmt.Errorf("read payload: %w", err)
 	}
 	return h, payload, nil
+}
+
+// AddToDataDefinition sends an ADD_TO_DATA_DEFINITION message to register
+// a SimVar with the given definition ID.
+func (c *Client) AddToDataDefinition(defID uint32, simvar SimVarDef) error {
+	// Payload layout:
+	//   defID        uint32 (4 bytes)
+	//   varName      null-terminated string (variable length)
+	//   unitName     null-terminated string (variable length)
+	//   dataType     uint32 (4 bytes)
+	varName := append([]byte(simvar.Name), 0)
+	unitName := append([]byte(simvar.Unit), 0)
+
+	payload := make([]byte, 0, 4+len(varName)+len(unitName)+4)
+	payload = binary.LittleEndian.AppendUint32(payload, defID)
+	payload = append(payload, varName...)
+	payload = append(payload, unitName...)
+	payload = binary.LittleEndian.AppendUint32(payload, uint32(simvar.DataType))
+
+	_, err := c.sendMessage(MsgAddToDataDef, payload)
+	return err
+}
+
+// RequestData sends a REQUEST_DATA message to start receiving data for
+// the given definition ID, object ID, and request ID.
+func (c *Client) RequestData(defID, objectID, requestID uint32) error {
+	// Payload layout:
+	//   requestID    uint32 (4 bytes)
+	//   defID        uint32 (4 bytes)
+	//   objectID     uint32 (4 bytes)
+	payload := make([]byte, 0, 12)
+	payload = binary.LittleEndian.AppendUint32(payload, requestID)
+	payload = binary.LittleEndian.AppendUint32(payload, defID)
+	payload = binary.LittleEndian.AppendUint32(payload, objectID)
+
+	_, err := c.sendMessage(MsgRequestData, payload)
+	return err
 }
