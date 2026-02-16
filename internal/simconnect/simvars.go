@@ -1,0 +1,78 @@
+package simconnect
+
+import (
+	"encoding/binary"
+	"fmt"
+	"math"
+)
+
+// DataType represents the SimConnect data type for a SimVar value.
+type DataType int
+
+const (
+	DataTypeFloat64 DataType = iota
+	DataTypeInt32
+)
+
+// SimVarDef defines a SimConnect simulation variable.
+type SimVarDef struct {
+	Name     string
+	Unit     string
+	DataType DataType
+	Size     int
+}
+
+// Predefined SimVar definitions for Phase 1.
+var PlaneLatitude = SimVarDef{
+	Name:     "PLANE LATITUDE",
+	Unit:     "degrees",
+	DataType: DataTypeFloat64,
+	Size:     8,
+}
+
+// SimVarRegistry holds the allowlist of valid SimVars.
+type SimVarRegistry struct {
+	vars map[string]SimVarDef
+}
+
+// NewSimVarRegistry creates a registry with all known SimVars.
+func NewSimVarRegistry() *SimVarRegistry {
+	r := &SimVarRegistry{
+		vars: make(map[string]SimVarDef),
+	}
+	r.vars[PlaneLatitude.Name] = PlaneLatitude
+	return r
+}
+
+// Get returns the SimVarDef for the given name, if it exists.
+func (r *SimVarRegistry) Get(name string) (SimVarDef, bool) {
+	def, ok := r.vars[name]
+	return def, ok
+}
+
+// Validate checks if a SimVar name is in the allowlist.
+func (r *SimVarRegistry) Validate(name string) error {
+	if _, ok := r.vars[name]; !ok {
+		return fmt.Errorf("%w: %s", ErrInvalidSimVar, name)
+	}
+	return nil
+}
+
+// ParseSimVarValue decodes raw bytes into a typed value based on the DataType.
+func ParseSimVarValue(data []byte, dt DataType) (any, error) {
+	switch dt {
+	case DataTypeFloat64:
+		if len(data) < 8 {
+			return nil, fmt.Errorf("float64 requires 8 bytes, got %d", len(data))
+		}
+		bits := binary.LittleEndian.Uint64(data[:8])
+		return math.Float64frombits(bits), nil
+	case DataTypeInt32:
+		if len(data) < 4 {
+			return nil, fmt.Errorf("int32 requires 4 bytes, got %d", len(data))
+		}
+		return int32(binary.LittleEndian.Uint32(data[:4])), nil
+	default:
+		return nil, fmt.Errorf("unsupported data type: %d", dt)
+	}
+}
