@@ -76,7 +76,7 @@ func (c *Client) connectWithConn(ctx context.Context, conn net.Conn) error {
 
 	// Build OPEN payload: null-terminated app name
 	appNameBytes := append([]byte(c.config.AppName), 0)
-	if _, err := c.sendMessageLocked(MsgOpen, appNameBytes); err != nil {
+	if err := c.sendMessageLocked(MsgOpen, appNameBytes); err != nil {
 		c.state.Store(int32(StateDisconnected))
 		return fmt.Errorf("simconnect open: %w", err)
 	}
@@ -95,7 +95,7 @@ func (c *Client) Close() error {
 	}
 
 	// Best-effort CLOSE message — ignore write errors on already-closed conn
-	_, _ = c.sendMessageLocked(MsgClose, nil)
+	_ = c.sendMessageLocked(MsgClose, nil)
 
 	err := c.conn.Close()
 	c.conn = nil
@@ -108,28 +108,27 @@ func (c *Client) Close() error {
 func (c *Client) sendMessage(msgType uint32, payload []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, err := c.sendMessageLocked(msgType, payload)
-	return err
+	return c.sendMessageLocked(msgType, payload)
 }
 
 // sendMessageLocked sends a message; caller must hold c.mu.
-func (c *Client) sendMessageLocked(msgType uint32, payload []byte) (uint32, error) {
+func (c *Client) sendMessageLocked(msgType uint32, payload []byte) error {
 	if c.conn == nil {
-		return 0, ErrNotConnected
+		return ErrNotConnected
 	}
 
 	id := c.nextID.Add(1)
 	header := EncodeHeader(msgType, id, len(payload))
 
 	if _, err := c.conn.Write(header); err != nil {
-		return 0, fmt.Errorf("write header: %w", err)
+		return fmt.Errorf("write header: %w", err)
 	}
 	if len(payload) > 0 {
 		if _, err := c.conn.Write(payload); err != nil {
-			return 0, fmt.Errorf("write payload: %w", err)
+			return fmt.Errorf("write payload: %w", err)
 		}
 	}
-	return id, nil
+	return nil
 }
 
 // ReadNext reads the next complete framed message from the SimConnect connection.

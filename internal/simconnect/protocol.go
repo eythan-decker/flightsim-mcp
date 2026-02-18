@@ -9,13 +9,13 @@ const (
 	HeaderSize      = 16
 	ProtocolVersion = 4
 
-	MsgOpen               = 0x0001
-	MsgClose              = 0x0002
-	MsgRequestData        = 0x0003
-	MsgSetDataDefinition  = 0x0004
-	MsgAddToDataDef       = 0x0005
-	MsgSimObjectData      = 0x0100
-	MsgException          = 0x0101
+	MsgOpen              = 0x0001
+	MsgClose             = 0x0002
+	MsgRequestData       = 0x0003
+	MsgSetDataDefinition = 0x0004
+	MsgAddToDataDef      = 0x0005
+	MsgSimObjectData     = 0x0100
+	MsgException         = 0x0101
 )
 
 // Header represents a SimConnect message header.

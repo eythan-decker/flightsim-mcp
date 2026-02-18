@@ -5,9 +5,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eytandecker/flightsim-mcp/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eytandecker/flightsim-mcp/pkg/types"
 )
 
 func samplePosition() types.AircraftPosition {
