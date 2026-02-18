@@ -22,13 +22,81 @@ type SimVarDef struct {
 	Size     int
 }
 
-// Predefined SimVar definitions for Phase 1.
-var PlaneLatitude = SimVarDef{
-	Name:     "PLANE LATITUDE",
-	Unit:     "degrees",
-	DataType: DataTypeFloat64,
-	Size:     8,
-}
+// Predefined SimVar definitions.
+var (
+	PlaneLatitude = SimVarDef{
+		Name:     "PLANE LATITUDE",
+		Unit:     "degrees",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	PlaneLongitude = SimVarDef{
+		Name:     "PLANE LONGITUDE",
+		Unit:     "degrees",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	PlaneAltitude = SimVarDef{
+		Name:     "PLANE ALTITUDE",
+		Unit:     "feet",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	PlaneAltAboveGround = SimVarDef{
+		Name:     "PLANE ALT ABOVE GROUND",
+		Unit:     "feet",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	PlaneHeadingTrue = SimVarDef{
+		Name:     "PLANE HEADING DEGREES TRUE",
+		Unit:     "degrees",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	PlaneHeadingMag = SimVarDef{
+		Name:     "PLANE HEADING DEGREES MAGNETIC",
+		Unit:     "degrees",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	AirspeedIndicated = SimVarDef{
+		Name:     "AIRSPEED INDICATED",
+		Unit:     "knots",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	AirspeedTrue = SimVarDef{
+		Name:     "AIRSPEED TRUE",
+		Unit:     "knots",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	GroundVelocity = SimVarDef{
+		Name:     "GROUND VELOCITY",
+		Unit:     "knots",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	VerticalSpeed = SimVarDef{
+		Name:     "VERTICAL SPEED",
+		Unit:     "feet/minute",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	PlanePitch = SimVarDef{
+		Name:     "PLANE PITCH DEGREES",
+		Unit:     "degrees",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+	PlaneBank = SimVarDef{
+		Name:     "PLANE BANK DEGREES",
+		Unit:     "degrees",
+		DataType: DataTypeFloat64,
+		Size:     8,
+	}
+)
 
 // SimVarRegistry holds the allowlist of valid SimVars.
 type SimVarRegistry struct {
@@ -40,7 +108,13 @@ func NewSimVarRegistry() *SimVarRegistry {
 	r := &SimVarRegistry{
 		vars: make(map[string]SimVarDef),
 	}
-	r.vars[PlaneLatitude.Name] = PlaneLatitude
+	for _, v := range []SimVarDef{
+		PlaneLatitude, PlaneLongitude, PlaneAltitude, PlaneAltAboveGround,
+		PlaneHeadingTrue, PlaneHeadingMag, AirspeedIndicated, AirspeedTrue,
+		GroundVelocity, VerticalSpeed, PlanePitch, PlaneBank,
+	} {
+		r.vars[v.Name] = v
+	}
 	return r
 }
 

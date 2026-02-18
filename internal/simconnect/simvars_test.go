@@ -124,3 +124,33 @@ func TestPlaneLatitudeDefinition(t *testing.T) {
 	assert.Equal(t, DataTypeFloat64, PlaneLatitude.DataType)
 	assert.Equal(t, 8, PlaneLatitude.Size)
 }
+
+func TestAllSimVarsRegistered(t *testing.T) {
+	registry := NewSimVarRegistry()
+	expected := []string{
+		"PLANE LATITUDE", "PLANE LONGITUDE", "PLANE ALTITUDE", "PLANE ALT ABOVE GROUND",
+		"PLANE HEADING DEGREES TRUE", "PLANE HEADING DEGREES MAGNETIC",
+		"AIRSPEED INDICATED", "AIRSPEED TRUE", "GROUND VELOCITY",
+		"VERTICAL SPEED", "PLANE PITCH DEGREES", "PLANE BANK DEGREES",
+	}
+	for _, name := range expected {
+		_, ok := registry.Get(name)
+		assert.True(t, ok, "expected %q to be registered", name)
+	}
+}
+
+func TestPositionSimVars(t *testing.T) {
+	assert.Len(t, PositionSimVars, 12)
+	assert.Equal(t, PlaneLatitude, PositionSimVars[0])
+	assert.Equal(t, PlaneLongitude, PositionSimVars[1])
+	assert.Equal(t, PlaneAltitude, PositionSimVars[2])
+	assert.Equal(t, PlaneAltAboveGround, PositionSimVars[3])
+	assert.Equal(t, PlaneHeadingTrue, PositionSimVars[4])
+	assert.Equal(t, PlaneHeadingMag, PositionSimVars[5])
+	assert.Equal(t, AirspeedIndicated, PositionSimVars[6])
+	assert.Equal(t, AirspeedTrue, PositionSimVars[7])
+	assert.Equal(t, GroundVelocity, PositionSimVars[8])
+	assert.Equal(t, VerticalSpeed, PositionSimVars[9])
+	assert.Equal(t, PlanePitch, PositionSimVars[10])
+	assert.Equal(t, PlaneBank, PositionSimVars[11])
+}
