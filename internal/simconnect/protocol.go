@@ -30,7 +30,7 @@ type Header struct {
 // The Size field is set to HeaderSize + payloadSize.
 func EncodeHeader(msgType, msgID uint32, payloadSize int) []byte {
 	buf := make([]byte, HeaderSize)
-	binary.LittleEndian.PutUint32(buf[0:4], uint32(HeaderSize)+uint32(payloadSize))
+	binary.LittleEndian.PutUint32(buf[0:4], uint32(HeaderSize)+uint32(payloadSize)) //nolint:gosec // payloadSize is a Go slice length, always non-negative and well within uint32 range
 	binary.LittleEndian.PutUint32(buf[4:8], ProtocolVersion)
 	binary.LittleEndian.PutUint32(buf[8:12], msgType)
 	binary.LittleEndian.PutUint32(buf[12:16], msgID)
