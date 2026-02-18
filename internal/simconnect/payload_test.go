@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func makePositionPayload(vals [12]float64) []byte {
+func makePositionPayload(vals [12]float64) []byte { //nolint:gocritic
 	buf := make([]byte, 12*8)
 	for i, v := range vals {
 		binary.LittleEndian.PutUint64(buf[i*8:], math.Float64bits(v))

@@ -47,7 +47,7 @@ func (p *Poller) RegisterSimVars() error {
 }
 
 // Start blocks, sending periodic RequestData messages and processing responses.
-// It exits when ctx is cancelled or the connection is closed.
+// It exits when ctx is canceled or the connection is closed.
 func (p *Poller) Start(ctx context.Context) error {
 	interval := p.cfg.PollInterval
 	if interval == 0 {

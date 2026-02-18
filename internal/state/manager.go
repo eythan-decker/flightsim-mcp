@@ -22,7 +22,7 @@ func NewManager(staleThreshold time.Duration) *Manager {
 }
 
 // Update stores a new position value and records the current time.
-func (m *Manager) Update(pos types.AircraftPosition) {
+func (m *Manager) Update(pos types.AircraftPosition) { //nolint:gocritic
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.position = pos

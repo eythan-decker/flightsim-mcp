@@ -192,7 +192,7 @@ func TestSendMessageWritesCorrectBytes(t *testing.T) {
 		}
 	}()
 
-	_, err := c.sendMessage(0x9999, payload)
+	err := c.sendMessage(0x9999, payload)
 	require.NoError(t, err)
 
 	select {

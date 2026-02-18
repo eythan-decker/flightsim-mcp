@@ -20,7 +20,7 @@ type mockUpdater struct {
 	calls []types.AircraftPosition
 }
 
-func (m *mockUpdater) Update(pos types.AircraftPosition) {
+func (m *mockUpdater) Update(pos types.AircraftPosition) { //nolint:gocritic
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.calls = append(m.calls, pos)
@@ -42,7 +42,7 @@ func (m *mockUpdater) LastCall() (types.AircraftPosition, bool) {
 }
 
 // buildPositionPayload builds a 96-byte position payload with the given values.
-func buildPositionPayload(vals [12]float64) []byte {
+func buildPositionPayload(vals [12]float64) []byte { //nolint:gocritic
 	buf := make([]byte, 96)
 	for i, v := range vals {
 		binary.LittleEndian.PutUint64(buf[i*8:], math.Float64bits(v))

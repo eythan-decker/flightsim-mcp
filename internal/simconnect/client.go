@@ -23,7 +23,7 @@ type Config struct {
 type ConnectionState int32
 
 const (
-	StateDisconnected  ConnectionState = iota
+	StateDisconnected ConnectionState = iota
 	StateConnecting
 	StateConnected
 	StateReconnecting
@@ -105,10 +105,11 @@ func (c *Client) Close() error {
 
 // sendMessage sends a framed message (header + payload) over the connection.
 // Thread-safe: acquires the mutex.
-func (c *Client) sendMessage(msgType uint32, payload []byte) (uint32, error) {
+func (c *Client) sendMessage(msgType uint32, payload []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.sendMessageLocked(msgType, payload)
+	_, err := c.sendMessageLocked(msgType, payload)
+	return err
 }
 
 // sendMessageLocked sends a message; caller must hold c.mu.
@@ -181,8 +182,7 @@ func (c *Client) AddToDataDefinition(defID uint32, simvar SimVarDef) error {
 	payload = append(payload, unitName...)
 	payload = binary.LittleEndian.AppendUint32(payload, uint32(simvar.DataType))
 
-	_, err := c.sendMessage(MsgAddToDataDef, payload)
-	return err
+	return c.sendMessage(MsgAddToDataDef, payload)
 }
 
 // RequestData sends a REQUEST_DATA message to start receiving data for
@@ -197,6 +197,5 @@ func (c *Client) RequestData(defID, objectID, requestID uint32) error {
 	payload = binary.LittleEndian.AppendUint32(payload, defID)
 	payload = binary.LittleEndian.AppendUint32(payload, objectID)
 
-	_, err := c.sendMessage(MsgRequestData, payload)
-	return err
+	return c.sendMessage(MsgRequestData, payload)
 }

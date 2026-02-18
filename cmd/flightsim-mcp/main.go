@@ -16,6 +16,13 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Printf("MCP server exited: %v", err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	cfg := config.Load()
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
@@ -27,9 +34,9 @@ func main() {
 	go runPollerLoop(ctx, cfg, mgr)
 
 	if err := mcpServer.Run(ctx); !errors.Is(err, context.Canceled) {
-		log.Printf("MCP server exited: %v", err)
-		os.Exit(1)
+		return err
 	}
+	return nil
 }
 
 // runPollerLoop connects to SimConnect and polls for data, retrying with
