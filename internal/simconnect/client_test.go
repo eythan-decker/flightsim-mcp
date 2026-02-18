@@ -226,6 +226,33 @@ func TestReadMessage(t *testing.T) {
 	assert.Equal(t, payload, data)
 }
 
+func TestReadNext(t *testing.T) {
+	c := NewClient(defaultTestConfig())
+	_, serverConn := connectAndDrainOpen(t, c)
+
+	payload := make([]byte, 8)
+	binary.LittleEndian.PutUint64(payload, 0xCAFEBABEDEADBEEF)
+
+	go func() {
+		header := EncodeHeader(MsgSimObjectData, 77, len(payload))
+		_, _ = serverConn.Write(header)
+		_, _ = serverConn.Write(payload)
+	}()
+
+	h, data, err := c.ReadNext()
+	require.NoError(t, err)
+	assert.Equal(t, uint32(MsgSimObjectData), h.Type)
+	assert.Equal(t, uint32(77), h.ID)
+	assert.Equal(t, payload, data)
+}
+
+func TestReadNextWhenNotConnected(t *testing.T) {
+	c := NewClient(defaultTestConfig())
+	_, _, err := c.ReadNext()
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrNotConnected)
+}
+
 func TestAddToDataDefinition(t *testing.T) {
 	c := NewClient(defaultTestConfig())
 	_, serverConn := connectAndDrainOpen(t, c)

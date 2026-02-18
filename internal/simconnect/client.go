@@ -131,6 +131,11 @@ func (c *Client) sendMessageLocked(msgType uint32, payload []byte) (uint32, erro
 	return id, nil
 }
 
+// ReadNext reads the next complete framed message from the SimConnect connection.
+func (c *Client) ReadNext() (Header, []byte, error) {
+	return c.readMessage()
+}
+
 // readMessage reads a complete framed message from the connection.
 func (c *Client) readMessage() (Header, []byte, error) {
 	if c.conn == nil {
