@@ -1,6 +1,6 @@
 module github.com/eytandecker/flightsim-mcp
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/modelcontextprotocol/go-sdk v0.8.0
