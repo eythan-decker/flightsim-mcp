@@ -145,7 +145,7 @@ func ParseSimVarValue(data []byte, dt DataType) (any, error) {
 		if len(data) < 4 {
 			return nil, fmt.Errorf("int32 requires 4 bytes, got %d", len(data))
 		}
-		return int32(binary.LittleEndian.Uint32(data[:4])), nil //nolint:gosec // intentional reinterpretation of binary-encoded signed int32
+		return int32(binary.LittleEndian.Uint32(data[:4])), nil // #nosec G115 -- intentional reinterpretation of binary-encoded signed int32
 	default:
 		return nil, fmt.Errorf("unsupported data type: %d", dt)
 	}

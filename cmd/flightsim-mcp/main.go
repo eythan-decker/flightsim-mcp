@@ -83,7 +83,7 @@ func runPoller(ctx context.Context, cfg config.Config, mgr *state.Manager) error
 	if err := client.Connect(ctx); err != nil {
 		return err
 	}
-	defer client.Close()
+	defer client.Close() //nolint:errcheck // best-effort cleanup on disconnect
 
 	pollerCfg := simconnect.PollerConfig{PollInterval: cfg.Polling.Interval}
 	poller := simconnect.NewPoller(client, mgr, pollerCfg)

@@ -179,7 +179,7 @@ func (c *Client) AddToDataDefinition(defID uint32, simvar SimVarDef) error {
 	payload = binary.LittleEndian.AppendUint32(payload, defID)
 	payload = append(payload, varName...)
 	payload = append(payload, unitName...)
-	payload = binary.LittleEndian.AppendUint32(payload, uint32(simvar.DataType)) //nolint:gosec // DataType is a small enum value, conversion is safe
+	payload = binary.LittleEndian.AppendUint32(payload, uint32(simvar.DataType)) // #nosec G115 -- DataType is a small enum value
 
 	return c.sendMessage(MsgAddToDataDef, payload)
 }
