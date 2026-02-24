@@ -128,15 +128,63 @@ func TestPlaneLatitudeDefinition(t *testing.T) {
 func TestAllSimVarsRegistered(t *testing.T) {
 	registry := NewSimVarRegistry()
 	expected := []string{
+		// Position (12)
 		"PLANE LATITUDE", "PLANE LONGITUDE", "PLANE ALTITUDE", "PLANE ALT ABOVE GROUND",
 		"PLANE HEADING DEGREES TRUE", "PLANE HEADING DEGREES MAGNETIC",
 		"AIRSPEED INDICATED", "AIRSPEED TRUE", "GROUND VELOCITY",
 		"VERTICAL SPEED", "PLANE PITCH DEGREES", "PLANE BANK DEGREES",
+		// Instruments (6 new, 5 shared with position)
+		"INDICATED ALTITUDE", "KOHLSMAN SETTING HG", "AIRSPEED MACH",
+		"HEADING INDICATOR", "TURN INDICATOR RATE", "TURN COORDINATOR BALL",
+		// Engine (20)
+		"NUMBER OF ENGINES",
+		"GENERAL ENG THROTTLE LEVER POSITION:1", "GENERAL ENG THROTTLE LEVER POSITION:2",
+		"GENERAL ENG RPM:1", "GENERAL ENG RPM:2",
+		"TURB ENG N1:1", "TURB ENG N1:2", "TURB ENG N2:1", "TURB ENG N2:2",
+		"ENG FUEL FLOW GPH:1", "ENG FUEL FLOW GPH:2",
+		"ENG EXHAUST GAS TEMPERATURE:1", "ENG EXHAUST GAS TEMPERATURE:2",
+		"GENERAL ENG OIL TEMPERATURE:1", "GENERAL ENG OIL TEMPERATURE:2",
+		"GENERAL ENG OIL PRESSURE:1", "GENERAL ENG OIL PRESSURE:2",
+		"FUEL TOTAL QUANTITY", "FUEL LEFT QUANTITY", "FUEL RIGHT QUANTITY",
+		// Environment (8)
+		"AMBIENT WIND VELOCITY", "AMBIENT WIND DIRECTION", "AMBIENT TEMPERATURE",
+		"AMBIENT PRESSURE", "AMBIENT VISIBILITY", "AMBIENT PRECIP STATE",
+		"LOCAL TIME", "ZULU TIME",
+		// Autopilot (12)
+		"AUTOPILOT MASTER", "AUTOPILOT HEADING LOCK", "AUTOPILOT NAV1 LOCK",
+		"AUTOPILOT APPROACH HOLD", "AUTOPILOT ALTITUDE LOCK", "AUTOPILOT VERTICAL HOLD",
+		"AUTOPILOT AIRSPEED HOLD", "AUTOPILOT FLIGHT DIRECTOR ACTIVE",
+		"AUTOPILOT HEADING LOCK DIR", "AUTOPILOT ALTITUDE LOCK VAR",
+		"AUTOPILOT VERTICAL HOLD VAR", "AUTOPILOT AIRSPEED HOLD VAR",
 	}
 	for _, name := range expected {
 		_, ok := registry.Get(name)
 		assert.True(t, ok, "expected %q to be registered", name)
 	}
+}
+
+func TestInstrumentsSimVars(t *testing.T) {
+	assert.Len(t, InstrumentsSimVars, 11)
+	assert.Equal(t, IndicatedAltitude, InstrumentsSimVars[0])
+	assert.Equal(t, PlaneBank, InstrumentsSimVars[10])
+}
+
+func TestEngineSimVars(t *testing.T) {
+	assert.Len(t, EngineSimVars, 20)
+	assert.Equal(t, NumberOfEngines, EngineSimVars[0])
+	assert.Equal(t, FuelRightQuantity, EngineSimVars[19])
+}
+
+func TestEnvironmentSimVars(t *testing.T) {
+	assert.Len(t, EnvironmentSimVars, 8)
+	assert.Equal(t, AmbientWindVelocity, EnvironmentSimVars[0])
+	assert.Equal(t, ZuluTime, EnvironmentSimVars[7])
+}
+
+func TestAutopilotSimVars(t *testing.T) {
+	assert.Len(t, AutopilotSimVars, 12)
+	assert.Equal(t, APMaster, AutopilotSimVars[0])
+	assert.Equal(t, APAirspeedHoldVar, AutopilotSimVars[11])
 }
 
 func TestPositionSimVars(t *testing.T) {

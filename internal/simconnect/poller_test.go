@@ -15,31 +15,92 @@ import (
 	"github.com/eytandecker/flightsim-mcp/pkg/types"
 )
 
-// mockUpdater captures Update calls for assertion.
+// mockUpdater captures all Update calls for assertion.
 type mockUpdater struct {
-	mu    sync.Mutex
-	calls []types.AircraftPosition
+	mu           sync.Mutex
+	positions    []types.AircraftPosition
+	instruments  []types.FlightInstruments
+	engines      []types.EngineData
+	environments []types.Environment
+	autopilots   []types.AutopilotState
 }
 
 func (m *mockUpdater) Update(pos types.AircraftPosition) { //nolint:gocritic
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.calls = append(m.calls, pos)
+	m.positions = append(m.positions, pos)
 }
 
-func (m *mockUpdater) CallCount() int {
+func (m *mockUpdater) UpdateInstruments(inst types.FlightInstruments) { //nolint:gocritic
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return len(m.calls)
+	m.instruments = append(m.instruments, inst)
 }
 
-func (m *mockUpdater) LastCall() (types.AircraftPosition, bool) {
+func (m *mockUpdater) UpdateEngine(eng types.EngineData) { //nolint:gocritic
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if len(m.calls) == 0 {
+	m.engines = append(m.engines, eng)
+}
+
+func (m *mockUpdater) UpdateEnvironment(env types.Environment) { //nolint:gocritic
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.environments = append(m.environments, env)
+}
+
+func (m *mockUpdater) UpdateAutopilot(ap types.AutopilotState) { //nolint:gocritic
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.autopilots = append(m.autopilots, ap)
+}
+
+func (m *mockUpdater) PositionCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.positions)
+}
+
+func (m *mockUpdater) LastPosition() (types.AircraftPosition, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.positions) == 0 {
 		return types.AircraftPosition{}, false
 	}
-	return m.calls[len(m.calls)-1], true
+	return m.positions[len(m.positions)-1], true
+}
+
+func (m *mockUpdater) InstrumentsCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.instruments)
+}
+
+func (m *mockUpdater) EngineCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.engines)
+}
+
+func (m *mockUpdater) EnvironmentCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.environments)
+}
+
+func (m *mockUpdater) AutopilotCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.autopilots)
+}
+
+// buildFloat64Payload builds a payload of N float64 values.
+func buildFloat64Payload(vals []float64) []byte {
+	buf := make([]byte, len(vals)*8)
+	for i, v := range vals {
+		binary.LittleEndian.PutUint64(buf[i*8:], math.Float64bits(v))
+	}
+	return buf
 }
 
 // buildPositionPayload builds a 96-byte position payload with the given values.
@@ -51,7 +112,7 @@ func buildPositionPayload(vals [12]float64) []byte { //nolint:gocritic
 	return buf
 }
 
-func newConnectedPoller(t *testing.T, updater PositionUpdater, cfg PollerConfig) (*Poller, net.Conn) {
+func newConnectedPoller(t *testing.T, updater StateUpdater, cfg PollerConfig) (*Poller, net.Conn) {
 	t.Helper()
 	c := NewClient(defaultTestConfig())
 	_, serverConn := connectAndDrainOpen(t, c)
@@ -63,9 +124,14 @@ func TestRegisterSimVarsSendsAllDefinitions(t *testing.T) {
 	updater := &mockUpdater{}
 	p, serverConn := newConnectedPoller(t, updater, DefaultPollerConfig())
 
-	received := make(chan Header, len(PositionSimVars))
+	// Total SimVars across all 5 groups: 12 + 11 + 20 + 8 + 12 = 63
+	totalVars := len(PositionSimVars) + len(InstrumentsSimVars) + len(EngineSimVars) +
+		len(EnvironmentSimVars) + len(AutopilotSimVars)
+	assert.Equal(t, 63, totalVars)
+
+	received := make(chan Header, totalVars)
 	go func() {
-		for i := 0; i < len(PositionSimVars); i++ {
+		for i := 0; i < totalVars; i++ {
 			h, _, err := drainOneMessage(serverConn)
 			if err != nil {
 				return
@@ -77,7 +143,7 @@ func TestRegisterSimVarsSendsAllDefinitions(t *testing.T) {
 	err := p.RegisterSimVars()
 	require.NoError(t, err)
 
-	for i := 0; i < len(PositionSimVars); i++ {
+	for i := 0; i < totalVars; i++ {
 		select {
 		case h := <-received:
 			assert.Equal(t, uint32(MsgAddToDataDef), h.Type, "message %d", i)
@@ -136,27 +202,130 @@ func TestReadLoopProcessesSimObjectData(t *testing.T) {
 	payload := buildPositionPayload(wantVals)
 
 	go func() {
-		// Drain the first RequestData that Start sends immediately on first tick
-		// (we use a long interval so it won't tick again, but Start drains the ticker channel)
-		// Send a SimObjectData response.
 		header := EncodeHeader(MsgSimObjectData, ReqIDPosition, len(payload))
 		_, _ = serverConn.Write(header)
 		_, _ = serverConn.Write(payload)
-		// Keep the connection open so readLoop doesn't exit
 		<-ctx.Done()
 	}()
 
 	go func() { _ = p.Start(ctx) }()
 
 	require.Eventually(t, func() bool {
-		return updater.CallCount() > 0
+		return updater.PositionCount() > 0
 	}, 2*time.Second, 10*time.Millisecond, "expected at least one Update call")
 
-	pos, ok := updater.LastCall()
+	pos, ok := updater.LastPosition()
 	require.True(t, ok)
 	assert.InDelta(t, 47.6062, pos.Latitude, 1e-9)
 	assert.InDelta(t, -122.3321, pos.Longitude, 1e-9)
 	assert.InDelta(t, 35000.0, pos.AltitudeMSL, 1e-9)
+}
+
+func TestReadLoopDispatchesInstruments(t *testing.T) {
+	updater := &mockUpdater{}
+	cfg := PollerConfig{PollInterval: 10 * time.Second}
+	p, serverConn := newConnectedPoller(t, updater, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	vals := make([]float64, 11)
+	vals[0] = 35000.0 // IndicatedAltitude
+	vals[5] = 0.78    // AirspeedMach
+	payload := buildFloat64Payload(vals)
+
+	go func() {
+		header := EncodeHeader(MsgSimObjectData, ReqIDInstruments, len(payload))
+		_, _ = serverConn.Write(header)
+		_, _ = serverConn.Write(payload)
+		<-ctx.Done()
+	}()
+
+	go func() { _ = p.Start(ctx) }()
+
+	require.Eventually(t, func() bool {
+		return updater.InstrumentsCount() > 0
+	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestReadLoopDispatchesEngine(t *testing.T) {
+	updater := &mockUpdater{}
+	cfg := PollerConfig{PollInterval: 10 * time.Second}
+	p, serverConn := newConnectedPoller(t, updater, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	vals := make([]float64, 20)
+	vals[0] = 2.0 // NumberOfEngines
+	payload := buildFloat64Payload(vals)
+
+	go func() {
+		header := EncodeHeader(MsgSimObjectData, ReqIDEngine, len(payload))
+		_, _ = serverConn.Write(header)
+		_, _ = serverConn.Write(payload)
+		<-ctx.Done()
+	}()
+
+	go func() { _ = p.Start(ctx) }()
+
+	require.Eventually(t, func() bool {
+		return updater.EngineCount() > 0
+	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestReadLoopDispatchesEnvironment(t *testing.T) {
+	updater := &mockUpdater{}
+	cfg := PollerConfig{PollInterval: 10 * time.Second}
+	p, serverConn := newConnectedPoller(t, updater, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	vals := make([]float64, 8)
+	vals[0] = 15.0 // WindVelocity
+	vals[2] = -5.5 // Temperature
+	payload := buildFloat64Payload(vals)
+
+	go func() {
+		header := EncodeHeader(MsgSimObjectData, ReqIDEnvironment, len(payload))
+		_, _ = serverConn.Write(header)
+		_, _ = serverConn.Write(payload)
+		<-ctx.Done()
+	}()
+
+	go func() { _ = p.Start(ctx) }()
+
+	require.Eventually(t, func() bool {
+		return updater.EnvironmentCount() > 0
+	}, 2*time.Second, 10*time.Millisecond)
+}
+
+func TestReadLoopDispatchesAutopilot(t *testing.T) {
+	updater := &mockUpdater{}
+	cfg := PollerConfig{PollInterval: 10 * time.Second}
+	p, serverConn := newConnectedPoller(t, updater, cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	vals := make([]float64, 12)
+	vals[0] = 1.0   // Master
+	vals[8] = 270.0 // HeadingLockDir
+	payload := buildFloat64Payload(vals)
+
+	go func() {
+		header := EncodeHeader(MsgSimObjectData, ReqIDAutopilot, len(payload))
+		_, _ = serverConn.Write(header)
+		_, _ = serverConn.Write(payload)
+		<-ctx.Done()
+	}()
+
+	go func() { _ = p.Start(ctx) }()
+
+	require.Eventually(t, func() bool {
+		return updater.AutopilotCount() > 0
+	}, 2*time.Second, 10*time.Millisecond)
 }
 
 func TestReadLoopExitsOnEOF(t *testing.T) {
@@ -167,14 +336,13 @@ func TestReadLoopExitsOnEOF(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	// Close the server side to cause EOF on the client
 	go func() {
 		time.Sleep(30 * time.Millisecond)
 		serverConn.Close()
 	}()
 
 	err := p.Start(ctx)
-	assert.Error(t, err) // EOF or broken pipe
+	assert.Error(t, err)
 }
 
 func TestStartExitsWhenContextCancelled(t *testing.T) {

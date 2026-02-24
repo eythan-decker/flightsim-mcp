@@ -8,10 +8,14 @@ import (
 	"github.com/eytandecker/flightsim-mcp/pkg/types"
 )
 
-// PositionUpdater is implemented by state.Manager.
+// StateUpdater is implemented by state.Manager.
 // Defined here (consuming side) to avoid import cycles.
-type PositionUpdater interface {
+type StateUpdater interface {
 	Update(pos types.AircraftPosition)
+	UpdateInstruments(inst types.FlightInstruments)
+	UpdateEngine(eng types.EngineData)
+	UpdateEnvironment(env types.Environment)
+	UpdateAutopilot(ap types.AutopilotState)
 }
 
 // PollerConfig holds configuration for the Poller.
@@ -24,26 +28,55 @@ func DefaultPollerConfig() PollerConfig {
 	return PollerConfig{PollInterval: 500 * time.Millisecond}
 }
 
-// Poller manages periodic SimConnect data requests and feeds updates to a PositionUpdater.
+// Poller manages periodic SimConnect data requests and feeds updates to a StateUpdater.
 type Poller struct {
 	client  *Client
-	updater PositionUpdater
+	updater StateUpdater
 	cfg     PollerConfig
 }
 
 // NewPoller creates a Poller backed by the given client and updater.
-func NewPoller(client *Client, updater PositionUpdater, cfg PollerConfig) *Poller {
+func NewPoller(client *Client, updater StateUpdater, cfg PollerConfig) *Poller {
 	return &Poller{client: client, updater: updater, cfg: cfg}
 }
 
-// RegisterSimVars calls AddToDataDefinition for each var in PositionSimVars.
+// dataGroup pairs a definition ID with a SimVar slice for registration.
+type dataGroup struct {
+	defID uint32
+	vars  []SimVarDef
+}
+
+// allGroups lists all data groups to register and poll.
+var allGroups = []dataGroup{
+	{DefIDPosition, PositionSimVars},
+	{DefIDInstruments, InstrumentsSimVars},
+	{DefIDEngine, EngineSimVars},
+	{DefIDEnvironment, EnvironmentSimVars},
+	{DefIDAutopilot, AutopilotSimVars},
+}
+
+// RegisterSimVars calls AddToDataDefinition for each var in all data groups.
 func (p *Poller) RegisterSimVars() error {
-	for _, sv := range PositionSimVars {
-		if err := p.client.AddToDataDefinition(DefIDPosition, sv); err != nil {
-			return err
+	for _, g := range allGroups {
+		for _, sv := range g.vars {
+			if err := p.client.AddToDataDefinition(g.defID, sv); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// requestIDs maps definition IDs to request IDs for polling.
+var requestIDs = []struct {
+	defID uint32
+	reqID uint32
+}{
+	{DefIDPosition, ReqIDPosition},
+	{DefIDInstruments, ReqIDInstruments},
+	{DefIDEngine, ReqIDEngine},
+	{DefIDEnvironment, ReqIDEnvironment},
+	{DefIDAutopilot, ReqIDAutopilot},
 }
 
 // Start blocks, sending periodic RequestData messages and processing responses.
@@ -67,8 +100,10 @@ func (p *Poller) Start(ctx context.Context) error {
 		case err := <-done:
 			return err
 		case <-ticker.C:
-			if err := p.client.RequestData(DefIDPosition, ObjectIDUser, ReqIDPosition); err != nil {
-				return err
+			for _, r := range requestIDs {
+				if err := p.client.RequestData(r.defID, ObjectIDUser, r.reqID); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -84,16 +119,50 @@ func (p *Poller) readLoop(done chan<- error) {
 		}
 		switch h.Type {
 		case MsgSimObjectData:
-			if h.ID == ReqIDPosition {
-				pos, err := ParsePositionPayload(data)
-				if err != nil {
-					log.Printf("simconnect: parse position payload: %v", err)
-					continue
-				}
-				p.updater.Update(pos)
-			}
+			p.dispatchPayload(h.ID, data)
 		case MsgException:
 			log.Printf("simconnect: received exception message (id=%d)", h.ID)
 		}
+	}
+}
+
+// dispatchPayload parses and routes a SimObjectData payload by request ID.
+func (p *Poller) dispatchPayload(reqID uint32, data []byte) {
+	switch reqID {
+	case ReqIDPosition:
+		pos, err := ParsePositionPayload(data)
+		if err != nil {
+			log.Printf("simconnect: parse position payload: %v", err)
+			return
+		}
+		p.updater.Update(pos)
+	case ReqIDInstruments:
+		inst, err := ParseInstrumentsPayload(data)
+		if err != nil {
+			log.Printf("simconnect: parse instruments payload: %v", err)
+			return
+		}
+		p.updater.UpdateInstruments(inst)
+	case ReqIDEngine:
+		eng, err := ParseEnginePayload(data)
+		if err != nil {
+			log.Printf("simconnect: parse engine payload: %v", err)
+			return
+		}
+		p.updater.UpdateEngine(eng)
+	case ReqIDEnvironment:
+		env, err := ParseEnvironmentPayload(data)
+		if err != nil {
+			log.Printf("simconnect: parse environment payload: %v", err)
+			return
+		}
+		p.updater.UpdateEnvironment(env)
+	case ReqIDAutopilot:
+		ap, err := ParseAutopilotPayload(data)
+		if err != nil {
+			log.Printf("simconnect: parse autopilot payload: %v", err)
+			return
+		}
+		p.updater.UpdateAutopilot(ap)
 	}
 }
