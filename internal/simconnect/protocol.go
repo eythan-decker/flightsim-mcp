@@ -6,46 +6,67 @@ import (
 )
 
 const (
-	HeaderSize      = 16
-	ProtocolVersion = 4
+	SendHeaderSize = 16 // 4 fields: Size, Version, Type, ID
+	RecvHeaderSize = 12 // 3 fields: Size, Version, Type (no ID)
 
-	MsgOpen              = 0x0001
-	MsgClose             = 0x0002
-	MsgRequestData       = 0x0003
-	MsgSetDataDefinition = 0x0004
-	MsgAddToDataDef      = 0x0005
-	MsgSimObjectData     = 0x0100
-	MsgException         = 0x0101
+	ProtocolVersion uint32 = 0x05 // KittyHawk (MSFS 2024)
+
+	// SendTypeMask is OR'd into the type field on all outgoing packets.
+	SendTypeMask uint32 = 0xf0000000
+
+	// Send types (raw values — mask applied in EncodeSendHeader).
+	SendOpen         uint32 = 0x01
+	SendClose        uint32 = 0x02
+	SendAddToDataDef uint32 = 0x0c
+	SendRequestData  uint32 = 0x0e
+
+	// Receive types (no mask).
+	RecvException     uint32 = 0x01
+	RecvOpen          uint32 = 0x02
+	RecvSimObjectData uint32 = 0x08
+
+	// KittyHawk OPEN version constants.
+	KHMajor      uint32 = 11
+	KHMinor      uint32 = 0
+	KHBuildMajor uint32 = 62651
+	KHBuildMinor uint32 = 3
+	KHAlias             = "HK"
 )
 
-// Header represents a SimConnect message header.
-type Header struct {
+// SendHeader represents an outgoing SimConnect message header (16 bytes).
+type SendHeader struct {
 	Size    uint32
 	Version uint32
-	Type    uint32
+	Type    uint32 // raw type with mask already applied
 	ID      uint32
 }
 
-// EncodeHeader builds a 16-byte little-endian header for a SimConnect message.
-// The Size field is set to HeaderSize + payloadSize.
-func EncodeHeader(msgType, msgID uint32, payloadSize int) []byte {
-	buf := make([]byte, HeaderSize)
-	binary.LittleEndian.PutUint32(buf[0:4], uint32(HeaderSize)+uint32(payloadSize)) // #nosec G115 -- payloadSize is a Go slice length, always non-negative
+// RecvHeader represents an incoming SimConnect message header (12 bytes, no ID).
+type RecvHeader struct {
+	Size    uint32
+	Version uint32
+	Type    uint32
+}
+
+// EncodeSendHeader builds a 16-byte little-endian header for an outgoing message.
+// The mask is applied automatically to msgType.
+func EncodeSendHeader(msgType, msgID uint32, payloadSize int) []byte {
+	buf := make([]byte, SendHeaderSize)
+	binary.LittleEndian.PutUint32(buf[0:4], uint32(SendHeaderSize)+uint32(payloadSize)) // #nosec G115 -- payloadSize is a Go slice length, always non-negative
 	binary.LittleEndian.PutUint32(buf[4:8], ProtocolVersion)
-	binary.LittleEndian.PutUint32(buf[8:12], msgType)
+	binary.LittleEndian.PutUint32(buf[8:12], msgType|SendTypeMask)
 	binary.LittleEndian.PutUint32(buf[12:16], msgID)
 	return buf
 }
 
-// DecodeHeader parses a 16-byte little-endian header from raw bytes.
-func DecodeHeader(data []byte) (Header, error) {
-	if len(data) < HeaderSize {
-		return Header{}, fmt.Errorf("header too short: got %d bytes, need %d", len(data), HeaderSize)
+// DecodeRecvHeader parses a 12-byte little-endian header from raw bytes.
+func DecodeRecvHeader(data []byte) (RecvHeader, error) {
+	if len(data) < RecvHeaderSize {
+		return RecvHeader{}, fmt.Errorf("header too short: got %d bytes, need %d", len(data), RecvHeaderSize)
 	}
-	return Header{
+	return RecvHeader{
 		Size:    binary.LittleEndian.Uint32(data[0:4]),
 		Version: binary.LittleEndian.Uint32(data[4:8]),
 		Type:    binary.LittleEndian.Uint32(data[8:12]),
-		ID:      binary.LittleEndian.Uint32(data[12:16]),
 	}, nil
 }

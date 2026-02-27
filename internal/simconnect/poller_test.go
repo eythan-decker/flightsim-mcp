@@ -112,6 +112,19 @@ func buildPositionPayload(vals [12]float64) []byte { //nolint:gocritic
 	return buf
 }
 
+// buildSimObjectDataResponse prepends the 28-byte SimObjectData header to raw float64 data.
+func buildSimObjectDataResponse(requestID, objectID, defineID uint32, rawData []byte) []byte {
+	header := make([]byte, simObjectDataHeaderSize)
+	binary.LittleEndian.PutUint32(header[0:4], requestID)
+	binary.LittleEndian.PutUint32(header[4:8], objectID)
+	binary.LittleEndian.PutUint32(header[8:12], defineID)
+	binary.LittleEndian.PutUint32(header[12:16], 0) // flags
+	binary.LittleEndian.PutUint32(header[16:20], 1) // entryNumber
+	binary.LittleEndian.PutUint32(header[20:24], 1) // outOf
+	binary.LittleEndian.PutUint32(header[24:28], 1) // defineCount
+	return append(header, rawData...)
+}
+
 func newConnectedPoller(t *testing.T, updater StateUpdater, cfg PollerConfig) (*Poller, net.Conn) {
 	t.Helper()
 	c := NewClient(defaultTestConfig())
@@ -129,7 +142,7 @@ func TestRegisterSimVarsSendsAllDefinitions(t *testing.T) {
 		len(EnvironmentSimVars) + len(AutopilotSimVars)
 	assert.Equal(t, 63, totalVars)
 
-	received := make(chan Header, totalVars)
+	received := make(chan SendHeader, totalVars)
 	go func() {
 		for i := 0; i < totalVars; i++ {
 			h, _, err := drainOneMessage(serverConn)
@@ -146,7 +159,7 @@ func TestRegisterSimVarsSendsAllDefinitions(t *testing.T) {
 	for i := 0; i < totalVars; i++ {
 		select {
 		case h := <-received:
-			assert.Equal(t, uint32(MsgAddToDataDef), h.Type, "message %d", i)
+			assert.Equal(t, SendAddToDataDef|SendTypeMask, h.Type, "message %d", i)
 		case <-time.After(2 * time.Second):
 			t.Fatalf("timeout waiting for AddToDataDef message %d", i)
 		}
@@ -168,7 +181,7 @@ func TestStartSendsRequestDataOnTick(t *testing.T) {
 			if err != nil {
 				return
 			}
-			if h.Type == uint32(MsgRequestData) {
+			if h.Type == SendRequestData|SendTypeMask {
 				select {
 				case requestSeen <- struct{}{}:
 				default:
@@ -189,7 +202,7 @@ func TestStartSendsRequestDataOnTick(t *testing.T) {
 
 func TestReadLoopProcessesSimObjectData(t *testing.T) {
 	updater := &mockUpdater{}
-	cfg := PollerConfig{PollInterval: 10 * time.Second} // long interval — we trigger manually
+	cfg := PollerConfig{PollInterval: 10 * time.Second}
 	p, serverConn := newConnectedPoller(t, updater, cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
@@ -199,12 +212,11 @@ func TestReadLoopProcessesSimObjectData(t *testing.T) {
 		47.6062, -122.3321, 35000.0, 34950.0,
 		270.0, 268.5, 450.0, 455.0, 448.0, 500.0, 2.5, -1.0,
 	}
-	payload := buildPositionPayload(wantVals)
+	rawData := buildPositionPayload(wantVals)
+	payload := buildSimObjectDataResponse(ReqIDPosition, 0, DefIDPosition, rawData)
 
 	go func() {
-		header := EncodeHeader(MsgSimObjectData, ReqIDPosition, len(payload))
-		_, _ = serverConn.Write(header)
-		_, _ = serverConn.Write(payload)
+		_ = writeRecvMessage(serverConn, RecvSimObjectData, payload)
 		<-ctx.Done()
 	}()
 
@@ -232,12 +244,11 @@ func TestReadLoopDispatchesInstruments(t *testing.T) {
 	vals := make([]float64, 11)
 	vals[0] = 35000.0 // IndicatedAltitude
 	vals[5] = 0.78    // AirspeedMach
-	payload := buildFloat64Payload(vals)
+	rawData := buildFloat64Payload(vals)
+	payload := buildSimObjectDataResponse(ReqIDInstruments, 0, DefIDInstruments, rawData)
 
 	go func() {
-		header := EncodeHeader(MsgSimObjectData, ReqIDInstruments, len(payload))
-		_, _ = serverConn.Write(header)
-		_, _ = serverConn.Write(payload)
+		_ = writeRecvMessage(serverConn, RecvSimObjectData, payload)
 		<-ctx.Done()
 	}()
 
@@ -258,12 +269,11 @@ func TestReadLoopDispatchesEngine(t *testing.T) {
 
 	vals := make([]float64, 20)
 	vals[0] = 2.0 // NumberOfEngines
-	payload := buildFloat64Payload(vals)
+	rawData := buildFloat64Payload(vals)
+	payload := buildSimObjectDataResponse(ReqIDEngine, 0, DefIDEngine, rawData)
 
 	go func() {
-		header := EncodeHeader(MsgSimObjectData, ReqIDEngine, len(payload))
-		_, _ = serverConn.Write(header)
-		_, _ = serverConn.Write(payload)
+		_ = writeRecvMessage(serverConn, RecvSimObjectData, payload)
 		<-ctx.Done()
 	}()
 
@@ -285,12 +295,11 @@ func TestReadLoopDispatchesEnvironment(t *testing.T) {
 	vals := make([]float64, 8)
 	vals[0] = 15.0 // WindVelocity
 	vals[2] = -5.5 // Temperature
-	payload := buildFloat64Payload(vals)
+	rawData := buildFloat64Payload(vals)
+	payload := buildSimObjectDataResponse(ReqIDEnvironment, 0, DefIDEnvironment, rawData)
 
 	go func() {
-		header := EncodeHeader(MsgSimObjectData, ReqIDEnvironment, len(payload))
-		_, _ = serverConn.Write(header)
-		_, _ = serverConn.Write(payload)
+		_ = writeRecvMessage(serverConn, RecvSimObjectData, payload)
 		<-ctx.Done()
 	}()
 
@@ -312,12 +321,11 @@ func TestReadLoopDispatchesAutopilot(t *testing.T) {
 	vals := make([]float64, 12)
 	vals[0] = 1.0   // Master
 	vals[8] = 270.0 // HeadingLockDir
-	payload := buildFloat64Payload(vals)
+	rawData := buildFloat64Payload(vals)
+	payload := buildSimObjectDataResponse(ReqIDAutopilot, 0, DefIDAutopilot, rawData)
 
 	go func() {
-		header := EncodeHeader(MsgSimObjectData, ReqIDAutopilot, len(payload))
-		_, _ = serverConn.Write(header)
-		_, _ = serverConn.Write(payload)
+		_ = writeRecvMessage(serverConn, RecvSimObjectData, payload)
 		<-ctx.Done()
 	}()
 

@@ -10,8 +10,8 @@ import (
 type DataType int
 
 const (
-	DataTypeFloat64 DataType = iota
-	DataTypeInt32
+	DataTypeInt32   DataType = 1
+	DataTypeFloat64 DataType = 4
 )
 
 // SimVarDef defines a SimConnect simulation variable.

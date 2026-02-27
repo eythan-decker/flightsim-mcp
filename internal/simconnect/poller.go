@@ -2,6 +2,7 @@ package simconnect
 
 import (
 	"context"
+	"encoding/binary"
 	"log"
 	"time"
 
@@ -109,6 +110,10 @@ func (p *Poller) Start(ctx context.Context) error {
 	}
 }
 
+// simObjectDataHeaderSize is the size of the SimObjectData response header
+// that precedes the raw SimVar data.
+const simObjectDataHeaderSize = 28
+
 // readLoop reads responses from SimConnect and dispatches them to the updater.
 func (p *Poller) readLoop(done chan<- error) {
 	for {
@@ -118,15 +123,22 @@ func (p *Poller) readLoop(done chan<- error) {
 			return
 		}
 		switch h.Type {
-		case MsgSimObjectData:
-			p.dispatchPayload(h.ID, data)
-		case MsgException:
-			log.Printf("simconnect: received exception message (id=%d)", h.ID)
+		case RecvSimObjectData:
+			if len(data) < simObjectDataHeaderSize {
+				log.Printf("simconnect: SimObjectData payload too short: %d bytes", len(data))
+				continue
+			}
+			reqID := binary.LittleEndian.Uint32(data[0:4])
+			p.dispatchPayload(reqID, data[simObjectDataHeaderSize:])
+		case RecvException:
+			p.handleException(data)
+		case RecvOpen:
+			log.Printf("simconnect: received OPEN ack")
 		}
 	}
 }
 
-// dispatchPayload parses and routes a SimObjectData payload by request ID.
+// dispatchPayload parses and routes raw SimVar data by request ID.
 func (p *Poller) dispatchPayload(reqID uint32, data []byte) {
 	switch reqID {
 	case ReqIDPosition:
@@ -165,4 +177,16 @@ func (p *Poller) dispatchPayload(reqID uint32, data []byte) {
 		}
 		p.updater.UpdateAutopilot(ap)
 	}
+}
+
+// handleException logs SimConnect exception details.
+func (p *Poller) handleException(data []byte) {
+	if len(data) < 12 {
+		log.Printf("simconnect: received exception (payload too short to parse)")
+		return
+	}
+	exceptionCode := binary.LittleEndian.Uint32(data[0:4])
+	sendID := binary.LittleEndian.Uint32(data[4:8])
+	index := binary.LittleEndian.Uint32(data[8:12])
+	log.Printf("simconnect: exception code=%d sendID=%d index=%d", exceptionCode, sendID, index)
 }
