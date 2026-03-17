@@ -165,20 +165,6 @@ SIMCONNECT_HOST=192.168.1.100 make run
 
 The server communicates via STDIO (stdin/stdout), which is how MCP clients like Claude Code interact with it. Log output goes to stderr.
 
-### Code Standards
-
-- **Test-driven development** — write tests first, then implementation
-- **Table-driven tests** using `testify/assert` and `testify/require`
-- **Error handling** — sentinel errors with `errors.Is()`, wrap with `fmt.Errorf("context: %w", err)`
-- **Concurrency** — `sync.RWMutex` for shared state, no panics in library code
-- **CI** — every PR runs lint (golangci-lint), tests with race detection, security scanning (gosec + govulncheck), and a full build
-
-### Git Workflow
-
-- Trunk-based development on `main`
-- Work in feature/fix branches, merge via pull request
-- Branch naming: `feat/description` or `bug/description`
-- Commits: 2-3 sentences max, concise and clear
 
 ## How It Works
 
