@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -74,6 +75,44 @@ func (s *Server) Run(ctx context.Context) error {
 // Connect connects the server to an existing transport (used in tests).
 func (s *Server) Connect(ctx context.Context, t mcpsdk.Transport) (*mcpsdk.ServerSession, error) {
 	return s.sdk.Connect(ctx, t, nil)
+}
+
+// Handler returns an http.Handler for MCP-over-HTTP (Streamable HTTP transport).
+func (s *Server) Handler() http.Handler {
+	return mcpsdk.NewStreamableHTTPHandler(
+		func(_ *http.Request) *mcpsdk.Server { return s.sdk },
+		&mcpsdk.StreamableHTTPOptions{Stateless: true},
+	)
+}
+
+// ReadinessChecker provides the most recent data update time.
+type ReadinessChecker interface {
+	LastUpdated() time.Time
+}
+
+// HealthHandler returns a liveness probe handler (always 200 if process is alive).
+func HealthHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`)) //nolint:errcheck
+	}
+}
+
+// ReadyHandler returns a readiness probe handler.
+// Returns 503 when no data has been received or data is older than staleThreshold.
+func ReadyHandler(rc ReadinessChecker, staleThreshold time.Duration) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		lu := rc.LastUpdated()
+		if lu.IsZero() || time.Since(lu) > staleThreshold {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"status":"not ready"}`)) //nolint:errcheck
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ready"}`)) //nolint:errcheck
+	}
 }
 
 // --- Input structs ---

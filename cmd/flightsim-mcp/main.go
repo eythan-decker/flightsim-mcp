@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -33,7 +34,32 @@ func run() error {
 
 	go runPollerLoop(ctx, cfg, mgr)
 
-	if err := mcpServer.Run(ctx); !errors.Is(err, context.Canceled) {
+	switch cfg.MCP.Transport {
+	case "http":
+		return runHTTP(ctx, cfg, mcpServer, mgr)
+	default:
+		if err := mcpServer.Run(ctx); !errors.Is(err, context.Canceled) {
+			return err
+		}
+		return nil
+	}
+}
+
+func runHTTP(ctx context.Context, cfg config.Config, srv *internalmcp.Server, mgr *state.Manager) error {
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", srv.Handler())
+	mux.Handle("/health", internalmcp.HealthHandler())
+	mux.Handle("/ready", internalmcp.ReadyHandler(mgr, cfg.Polling.StaleThreshold))
+
+	httpServer := &http.Server{Addr: cfg.MCP.HTTPAddr, Handler: mux}
+
+	go func() {
+		<-ctx.Done()
+		httpServer.Shutdown(context.Background()) //nolint:errcheck
+	}()
+
+	log.Printf("MCP HTTP server listening on %s", cfg.MCP.HTTPAddr)
+	if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil

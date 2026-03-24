@@ -15,6 +15,8 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, "flightsim-mcp", cfg.SimConnect.AppName)
 	assert.Equal(t, 500*time.Millisecond, cfg.Polling.Interval)
 	assert.Equal(t, 5*time.Second, cfg.Polling.StaleThreshold)
+	assert.Equal(t, "stdio", cfg.MCP.Transport)
+	assert.Equal(t, ":8080", cfg.MCP.HTTPAddr)
 }
 
 func TestLoadFromEnv(t *testing.T) {
@@ -94,6 +96,22 @@ func TestLoadFromEnv(t *testing.T) {
 			envVal: "10s",
 			check: func(t *testing.T, cfg Config) {
 				assert.Equal(t, 10*time.Second, cfg.Polling.StaleThreshold)
+			},
+		},
+		{
+			name:   "MCP_TRANSPORT set to http",
+			envKey: "MCP_TRANSPORT",
+			envVal: "http",
+			check: func(t *testing.T, cfg Config) {
+				assert.Equal(t, "http", cfg.MCP.Transport)
+			},
+		},
+		{
+			name:   "MCP_HTTP_ADDR custom",
+			envKey: "MCP_HTTP_ADDR",
+			envVal: ":9090",
+			check: func(t *testing.T, cfg Config) {
+				assert.Equal(t, ":9090", cfg.MCP.HTTPAddr)
 			},
 		},
 	}

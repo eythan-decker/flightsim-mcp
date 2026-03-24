@@ -10,6 +10,13 @@ import (
 type Config struct {
 	SimConnect SimConnectConfig
 	Polling    PollingConfig
+	MCP        MCPConfig
+}
+
+// MCPConfig holds MCP server transport settings.
+type MCPConfig struct {
+	Transport string
+	HTTPAddr  string
 }
 
 // SimConnectConfig holds SimConnect TCP connection settings.
@@ -38,6 +45,10 @@ func Load() Config {
 		Polling: PollingConfig{
 			Interval:       getEnvDuration("POLL_INTERVAL", 500*time.Millisecond),
 			StaleThreshold: getEnvDuration("STALE_THRESHOLD", 5*time.Second),
+		},
+		MCP: MCPConfig{
+			Transport: getEnvString("MCP_TRANSPORT", "stdio"),
+			HTTPAddr:  getEnvString("MCP_HTTP_ADDR", ":8080"),
 		},
 	}
 }

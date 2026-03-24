@@ -1,0 +1,8 @@
+.git/
+bin/
+coverage.*
+.github/
+.claude/
+*.md
+docs/
+.mcp.json
