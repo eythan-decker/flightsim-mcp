@@ -95,7 +95,7 @@ func HealthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`)) //nolint:errcheck // best-effort response write
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}
 }
 
@@ -107,11 +107,11 @@ func ReadyHandler(rc ReadinessChecker, staleThreshold time.Duration) http.Handle
 		lu := rc.LastUpdated()
 		if lu.IsZero() || time.Since(lu) > staleThreshold {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"status":"not ready"}`)) //nolint:errcheck // best-effort response write
+			_, _ = w.Write([]byte(`{"status":"not ready"}`))
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ready"}`)) //nolint:errcheck // best-effort response write
+		_, _ = w.Write([]byte(`{"status":"ready"}`))
 	}
 }
 

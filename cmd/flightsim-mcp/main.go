@@ -51,11 +51,17 @@ func runHTTP(ctx context.Context, cfg *config.Config, srv *internalmcp.Server, m
 	mux.Handle("/health", internalmcp.HealthHandler())
 	mux.Handle("/ready", internalmcp.ReadyHandler(mgr, cfg.Polling.StaleThreshold))
 
-	httpServer := &http.Server{Addr: cfg.MCP.HTTPAddr, Handler: mux}
+	httpServer := &http.Server{
+		Addr:              cfg.MCP.HTTPAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
 
 	go func() {
 		<-ctx.Done()
-		httpServer.Shutdown(context.Background()) //nolint:errcheck // best-effort shutdown
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // #nosec G118 -- ctx is already canceled; need a fresh context for graceful drain
+		defer cancel()
+		_ = httpServer.Shutdown(shutCtx)
 	}()
 
 	log.Printf("MCP HTTP server listening on %s", cfg.MCP.HTTPAddr)
