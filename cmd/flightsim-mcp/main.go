@@ -57,9 +57,9 @@ func runHTTP(ctx context.Context, cfg *config.Config, srv *internalmcp.Server, m
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
-	go func() {
+	go func() { // #nosec G118 -- ctx is already canceled; need a fresh context for graceful drain
 		<-ctx.Done()
-		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second) // #nosec G118 -- ctx is already canceled; need a fresh context for graceful drain
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = httpServer.Shutdown(shutCtx)
 	}()
