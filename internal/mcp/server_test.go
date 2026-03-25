@@ -385,7 +385,7 @@ func TestHandler_ReturnsNonNil(t *testing.T) {
 func TestHealthHandler_Returns200(t *testing.T) {
 	handler := internalmcp.HealthHandler()
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", nil))
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", http.NoBody))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "ok")
@@ -403,7 +403,7 @@ func TestReadyHandler_Fresh(t *testing.T) {
 	rc := &mockReadinessChecker{lastUpdated: time.Now()}
 	handler := internalmcp.ReadyHandler(rc, 5*time.Second)
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", http.NoBody))
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), "ready")
@@ -413,7 +413,7 @@ func TestReadyHandler_Stale(t *testing.T) {
 	rc := &mockReadinessChecker{lastUpdated: time.Now().Add(-10 * time.Second)}
 	handler := internalmcp.ReadyHandler(rc, 5*time.Second)
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", http.NoBody))
 
 	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	assert.Contains(t, rec.Body.String(), "not ready")
@@ -423,7 +423,7 @@ func TestReadyHandler_NeverUpdated(t *testing.T) {
 	rc := &mockReadinessChecker{lastUpdated: time.Time{}}
 	handler := internalmcp.ReadyHandler(rc, 5*time.Second)
 	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", http.NoBody))
 
 	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	assert.Contains(t, rec.Body.String(), "not ready")

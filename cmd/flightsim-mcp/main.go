@@ -32,11 +32,11 @@ func run() error {
 	mgr := state.NewManager(cfg.Polling.StaleThreshold)
 	mcpServer := internalmcp.NewServer(mgr)
 
-	go runPollerLoop(ctx, cfg, mgr)
+	go runPollerLoop(ctx, &cfg, mgr)
 
 	switch cfg.MCP.Transport {
 	case "http":
-		return runHTTP(ctx, cfg, mcpServer, mgr)
+		return runHTTP(ctx, &cfg, mcpServer, mgr)
 	default:
 		if err := mcpServer.Run(ctx); !errors.Is(err, context.Canceled) {
 			return err
@@ -45,7 +45,7 @@ func run() error {
 	}
 }
 
-func runHTTP(ctx context.Context, cfg config.Config, srv *internalmcp.Server, mgr *state.Manager) error {
+func runHTTP(ctx context.Context, cfg *config.Config, srv *internalmcp.Server, mgr *state.Manager) error {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", srv.Handler())
 	mux.Handle("/health", internalmcp.HealthHandler())
@@ -55,7 +55,7 @@ func runHTTP(ctx context.Context, cfg config.Config, srv *internalmcp.Server, mg
 
 	go func() {
 		<-ctx.Done()
-		httpServer.Shutdown(context.Background()) //nolint:errcheck
+		httpServer.Shutdown(context.Background()) //nolint:errcheck // best-effort shutdown
 	}()
 
 	log.Printf("MCP HTTP server listening on %s", cfg.MCP.HTTPAddr)
@@ -67,7 +67,7 @@ func runHTTP(ctx context.Context, cfg config.Config, srv *internalmcp.Server, mg
 
 // runPollerLoop connects to SimConnect and polls for data, retrying with
 // exponential backoff (1s → 30s cap) on failure.
-func runPollerLoop(ctx context.Context, cfg config.Config, mgr *state.Manager) {
+func runPollerLoop(ctx context.Context, cfg *config.Config, mgr *state.Manager) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 
@@ -98,7 +98,7 @@ func runPollerLoop(ctx context.Context, cfg config.Config, mgr *state.Manager) {
 
 // runPoller creates a client, registers SimVars, and runs the polling loop.
 // Returns when the connection is lost or ctx is done.
-func runPoller(ctx context.Context, cfg config.Config, mgr *state.Manager) error {
+func runPoller(ctx context.Context, cfg *config.Config, mgr *state.Manager) error {
 	client := simconnect.NewClient(simconnect.Config{
 		Host:    cfg.SimConnect.Host,
 		Port:    cfg.SimConnect.Port,
