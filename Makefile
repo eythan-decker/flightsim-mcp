@@ -1,4 +1,3 @@
-.PHONY: build test lint vet fmt clean coverage docker-build
 
 BINARY_NAME=flightsim-mcp
 IMAGE_NAME=ghcr.io/eythan-decker/flightsim-mcp
@@ -29,5 +28,11 @@ clean:
 
 docker-build:
 	docker build -t $(IMAGE_NAME):$(VERSION) -f deploy/docker/Dockerfile .
+
+docker-push: docker-build
+	docker push $(IMAGE_NAME):$(VERSION)
+
+run: build
+	@./bin/$(BINARY_NAME)
 
 all: fmt vet lint test build

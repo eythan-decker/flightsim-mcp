@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -370,4 +372,59 @@ func TestGetAutopilotStateBoolConversion(t *testing.T) {
 	assert.Equal(t, false, m["master"])
 	assert.Equal(t, false, m["heading_lock"])
 	assert.Equal(t, false, m["flight_director"])
+}
+
+// --- HTTP handler tests ---
+
+func TestHandler_ReturnsNonNil(t *testing.T) {
+	sg := &mockStateGetter{}
+	srv := internalmcp.NewServer(sg)
+	assert.NotNil(t, srv.Handler())
+}
+
+func TestHealthHandler_Returns200(t *testing.T) {
+	handler := internalmcp.HealthHandler()
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/health", http.NoBody))
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "ok")
+}
+
+type mockReadinessChecker struct {
+	lastUpdated time.Time
+}
+
+func (m *mockReadinessChecker) LastUpdated() time.Time {
+	return m.lastUpdated
+}
+
+func TestReadyHandler_Fresh(t *testing.T) {
+	rc := &mockReadinessChecker{lastUpdated: time.Now()}
+	handler := internalmcp.ReadyHandler(rc, 5*time.Second)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", http.NoBody))
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "ready")
+}
+
+func TestReadyHandler_Stale(t *testing.T) {
+	rc := &mockReadinessChecker{lastUpdated: time.Now().Add(-10 * time.Second)}
+	handler := internalmcp.ReadyHandler(rc, 5*time.Second)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", http.NoBody))
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Contains(t, rec.Body.String(), "not ready")
+}
+
+func TestReadyHandler_NeverUpdated(t *testing.T) {
+	rc := &mockReadinessChecker{lastUpdated: time.Time{}}
+	handler := internalmcp.ReadyHandler(rc, 5*time.Second)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/ready", http.NoBody))
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.Contains(t, rec.Body.String(), "not ready")
 }

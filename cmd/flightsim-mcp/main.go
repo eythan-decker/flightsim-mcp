@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,9 +32,40 @@ func run() error {
 	mgr := state.NewManager(cfg.Polling.StaleThreshold)
 	mcpServer := internalmcp.NewServer(mgr)
 
-	go runPollerLoop(ctx, cfg, mgr)
+	go runPollerLoop(ctx, &cfg, mgr)
 
-	if err := mcpServer.Run(ctx); !errors.Is(err, context.Canceled) {
+	switch cfg.MCP.Transport {
+	case "http":
+		return runHTTP(ctx, &cfg, mcpServer, mgr)
+	default:
+		if err := mcpServer.Run(ctx); !errors.Is(err, context.Canceled) {
+			return err
+		}
+		return nil
+	}
+}
+
+func runHTTP(ctx context.Context, cfg *config.Config, srv *internalmcp.Server, mgr *state.Manager) error {
+	mux := http.NewServeMux()
+	mux.Handle("/mcp", srv.Handler())
+	mux.Handle("/health", internalmcp.HealthHandler())
+	mux.Handle("/ready", internalmcp.ReadyHandler(mgr, cfg.Polling.StaleThreshold))
+
+	httpServer := &http.Server{
+		Addr:              cfg.MCP.HTTPAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	go func() { // #nosec G118 -- ctx is already canceled; need a fresh context for graceful drain
+		<-ctx.Done()
+		shutCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = httpServer.Shutdown(shutCtx)
+	}()
+
+	log.Printf("MCP HTTP server listening on %s", cfg.MCP.HTTPAddr)
+	if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 	return nil
@@ -41,7 +73,7 @@ func run() error {
 
 // runPollerLoop connects to SimConnect and polls for data, retrying with
 // exponential backoff (1s → 30s cap) on failure.
-func runPollerLoop(ctx context.Context, cfg config.Config, mgr *state.Manager) {
+func runPollerLoop(ctx context.Context, cfg *config.Config, mgr *state.Manager) {
 	backoff := time.Second
 	const maxBackoff = 30 * time.Second
 
@@ -72,7 +104,7 @@ func runPollerLoop(ctx context.Context, cfg config.Config, mgr *state.Manager) {
 
 // runPoller creates a client, registers SimVars, and runs the polling loop.
 // Returns when the connection is lost or ctx is done.
-func runPoller(ctx context.Context, cfg config.Config, mgr *state.Manager) error {
+func runPoller(ctx context.Context, cfg *config.Config, mgr *state.Manager) error {
 	client := simconnect.NewClient(simconnect.Config{
 		Host:    cfg.SimConnect.Host,
 		Port:    cfg.SimConnect.Port,
